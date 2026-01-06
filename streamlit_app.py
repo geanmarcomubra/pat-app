@@ -4,7 +4,6 @@ from PIL import Image
 import numpy as np
 import tempfile
 
-
 # Configuración de la página
 st.set_page_config(
     page_title="Detección de Patologías en Hormigón",
