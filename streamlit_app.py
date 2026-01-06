@@ -1,12 +1,11 @@
 import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
-import numpy as np
 import tempfile
 import os
 
 # -------------------------------
-# CONFIGURACIÓN DE LA PÁGINA
+# CONFIGURACIÓN DE PÁGINA
 # -------------------------------
 st.set_page_config(
     page_title="Detección de Patologías en Hormigón",
@@ -15,8 +14,8 @@ st.set_page_config(
 
 st.title("🧱 Detección de Patologías en Hormigón")
 st.write(
-    "Aplicación web para la detección automática de patologías en elementos "
-    "de hormigón utilizando un modelo YOLOv8."
+    "Aplicación web para detectar patologías en elementos de hormigón "
+    "utilizando un modelo YOLOv8 entrenado."
 )
 
 # -------------------------------
@@ -24,7 +23,7 @@ st.write(
 # -------------------------------
 @st.cache_resource
 def load_model():
-    return YOLO("best.pt")
+    return YOLO("best.pt", task="detect")
 
 model = load_model()
 
@@ -37,11 +36,10 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
-    # Abrir imagen
     image = Image.open(uploaded_file).convert("RGB")
 
     st.subheader("Imagen original")
-    st.image(image)  # ⬅️ SIN width
+    st.image(image)
 
     # Guardar imagen temporal
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
@@ -49,37 +47,40 @@ if uploaded_file is not None:
         temp_image_path = tmp.name
 
     # -------------------------------
-    # INFERENCIA
+    # INFERENCIA (FORMA SEGURA)
     # -------------------------------
     with st.spinner("🔍 Analizando imagen..."):
-        results = model(temp_image_path)
+        results = model.predict(
+            source=temp_image_path,
+            conf=0.25,
+            save=False
+        )
 
-    # Imagen con detecciones (numpy array)
-    result_img = results[0].plot()
+    result = results[0]
+    result_img = result.plot()
 
     st.subheader("Resultado de la detección")
-    st.image(result_img)  # ⬅️ SIN width
+    st.image(result_img)
 
     # -------------------------------
-    # RESULTADOS TEXTUALES
+    # DIAGNÓSTICO
     # -------------------------------
     st.subheader("Diagnóstico")
 
-    if len(results[0].boxes) == 0:
+    if result.boxes is None or len(result.boxes) == 0:
         st.success("✅ No se detectaron patologías en la imagen.")
     else:
-        clases = results[0].names
-        detectadas = set()
+        class_names = result.names
+        detected = set()
 
-        for box in results[0].boxes:
+        for box in result.boxes:
             cls_id = int(box.cls[0])
-            detectadas.add(clases[cls_id])
+            detected.add(class_names[cls_id])
 
         st.warning("⚠️ Patologías detectadas:")
-        for d in detectadas:
+        for d in detected:
             st.write(f"- {d}")
 
-    # Limpiar archivo temporal
     os.remove(temp_image_path)
 
 else:
