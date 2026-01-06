@@ -3,75 +3,84 @@ from ultralytics import YOLO
 from PIL import Image
 import numpy as np
 import tempfile
+import os
 
-# Configuración de la página
+# -------------------------------
+# CONFIGURACIÓN DE LA PÁGINA
+# -------------------------------
 st.set_page_config(
     page_title="Detección de Patologías en Hormigón",
-    layout="centered"
+    layout="wide"
 )
 
 st.title("🧱 Detección de Patologías en Hormigón")
 st.write(
-    "Aplicación web para la detección automática de patologías "
-    "en estructuras de hormigón utilizando un modelo YOLOv8."
+    "Aplicación web para la detección automática de patologías en elementos "
+    "de hormigón utilizando un modelo YOLOv8."
 )
 
-# Cargar modelo SOLO una vez
+# -------------------------------
+# CARGA DEL MODELO
+# -------------------------------
 @st.cache_resource
-def cargar_modelo():
+def load_model():
     return YOLO("best.pt")
 
-modelo = cargar_modelo()
+model = load_model()
 
-# Subir imagen
-imagen_subida = st.file_uploader(
-    "📷 Suba una imagen de la estructura de hormigón",
+# -------------------------------
+# SUBIDA DE IMAGEN
+# -------------------------------
+uploaded_file = st.file_uploader(
+    "📤 Sube una imagen del elemento de hormigón",
     type=["jpg", "jpeg", "png"]
 )
 
-# Umbral de confianza
-umbral = st.slider(
-    "🔧 Umbral de confianza",
-    min_value=0.1,
-    max_value=1.0,
-    value=0.4,
-    step=0.05
-)
+if uploaded_file is not None:
+    # Abrir imagen
+    image = Image.open(uploaded_file).convert("RGB")
 
-if imagen_subida is not None:
-    imagen = Image.open(imagen_subida).convert("RGB")
+    st.subheader("Imagen original")
+    st.image(image)  # ⬅️ SIN width
 
-    st.image(
-        imagen,
-        caption="Imagen cargada",
-        width="stretch"
-    )
+    # Guardar imagen temporal
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        image.save(tmp.name)
+        temp_image_path = tmp.name
 
-    # Inferencia
-    resultados = modelo.predict(imagen, conf=umbral)
-    resultado = resultados[0]
+    # -------------------------------
+    # INFERENCIA
+    # -------------------------------
+    with st.spinner("🔍 Analizando imagen..."):
+        results = model(temp_image_path)
 
-    st.subheader("🧪 Resultado del análisis")
+    # Imagen con detecciones (numpy array)
+    result_img = results[0].plot()
 
-    if len(resultado.boxes) == 0:
-        st.success("✅ No se detectaron patologías visibles en la imagen.")
+    st.subheader("Resultado de la detección")
+    st.image(result_img)  # ⬅️ SIN width
+
+    # -------------------------------
+    # RESULTADOS TEXTUALES
+    # -------------------------------
+    st.subheader("Diagnóstico")
+
+    if len(results[0].boxes) == 0:
+        st.success("✅ No se detectaron patologías en la imagen.")
     else:
-        st.warning("⚠ Patologías detectadas:")
+        clases = results[0].names
+        detectadas = set()
 
-        for box in resultado.boxes:
-            clase_id = int(box.cls[0])
-            clase_nombre = modelo.names[clase_id]
-            confianza = float(box.conf[0])
+        for box in results[0].boxes:
+            cls_id = int(box.cls[0])
+            detectadas.add(clases[cls_id])
 
-            st.write(
-                f"• **{clase_nombre}** — Confianza: **{confianza:.2%}**"
-            )
+        st.warning("⚠️ Patologías detectadas:")
+        for d in detectadas:
+            st.write(f"- {d}")
 
-        # Imagen con detecciones
-        img_resultado = resultado.plot()
+    # Limpiar archivo temporal
+    os.remove(temp_image_path)
 
-        st.image(
-            img_resultado,
-            caption="Resultado con detecciones",
-            width="stretch"
-        )
+else:
+    st.info("⬆️ Por favor, sube una imagen para iniciar el análisis.")
