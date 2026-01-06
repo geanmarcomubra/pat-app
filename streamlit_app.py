@@ -1,6 +1,9 @@
 import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
+import numpy as np
+import tempfile
+
 
 # Configuración de la página
 st.set_page_config(
